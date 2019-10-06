@@ -1,11 +1,11 @@
 import Konva from 'konva';
 import Character from './Character';
 
-const colors = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
+const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
 getRandomEasing();
 
 /** Create a square color enemy. */
-function createNPC(props = {}, stage, players: any[] = []) {
+function createNPC(props = {}, stage, players: any[] = []): Konva.Rect {
   const x = randomNumber(0, stage.width());
   const y = randomNumber(0, stage.height());
 
@@ -45,7 +45,7 @@ function createNPC(props = {}, stage, players: any[] = []) {
 }
 
 /** Setup and display the Konva.Stage. */
-export default function GameStage(props) {
+export default function GameStage(props): Konva.Stage {
   const dimensions = {width: 600, height: 400};
   const stage = new Konva.Stage({
     ...dimensions,
@@ -97,22 +97,35 @@ export default function GameStage(props) {
 
     layer.batchDraw();
   });
+
+  return stage;
+}
+
+/** Animate the background from dark to light. */
+function updateBackground(player): void {
+  const stage = player.getStage();
+  const fill = colors[player.numPoints() - 4];
+  const tween = getRandomTween(stage, 2, {fill});
+  tween.play();
 }
 
 /** Controller for player collision. */
-function handleIntersection(attack, defense) {
+function handleIntersection(attack, defense): boolean {
  const approved = checkAttack(attack, defense);
   if (approved) {
     destroy(defense);
+    updateBackground(attack);
     attack.numPoints(attack.numPoints() + 1);
   }
   else {
     endGame(attack, defense);
   }
+
+  return approved;
 }
 
 /** Trigger endgame for the player. */
-function endGame(player, defense) {
+function endGame(player, defense): void {
   console.log("Player: " , player);
   console.log("defense", defense);
   alert("You lose.");
@@ -121,7 +134,7 @@ function endGame(player, defense) {
 }
 
 /** Parse an attack for victory or defeat. */
-function checkAttack(player, defense) {
+function checkAttack(player, defense): boolean {
   if (defense.id() == 'destroyed') 
     return true; 
   /**
@@ -136,7 +149,7 @@ function checkAttack(player, defense) {
 }
 
 /** Remove a node from gameplay. */
-function destroy(node) {
+function destroy(node): void {
   const duration = 0.3; // seconds
   const tween = getRandomTween(node, duration);
   tween.play();
@@ -144,12 +157,12 @@ function destroy(node) {
 }
 
 /** Get parameters for an objects kill animation. */
-function getRandomTween(node, duration = 0.3) {
+function getRandomTween(node, duration = 0.3, props = {}): Konva.Tween {
   const stage = node.getStage();
   const x = randomNumber(0, stage.width());
   const y = randomNumber(0, stage.height());
 
-  const tween = new Konva.Tween({
+  const tween = new Konva.Tween(Object.assign({
     x, 
     y,
     duration,
@@ -157,7 +170,7 @@ function getRandomTween(node, duration = 0.3) {
     width: 0,
     height: 0,
     easing: Konva.Easings[getRandomEasing()]
-  });
+  }, props));
 
   return tween;
 }
@@ -169,7 +182,7 @@ function getRandomEasing(): string {
 }
 
 /** Detect collision between Bounds of two objects. */
-function hasIntersection(rect1, rect2) {
+function hasIntersection(rect1, rect2): boolean {
   return !(
     rect2.x > rect1.x + rect1.width ||
     rect2.x + rect2.width < rect1.x ||
@@ -178,8 +191,8 @@ function hasIntersection(rect1, rect2) {
   );
 }
 
-/** Parse a keystroke into a player movement; update the player position. *.
-function updatePosition(event, object) {
+/** Parse a keystroke into a player movement; update the player position. */
+function updatePosition(event, object): void {
   const MOTION = 10;
   if (event.keyCode === 37) {
     object.x(object.x() - MOTION);
@@ -195,21 +208,21 @@ function updatePosition(event, object) {
 }
 
 /** Generate a random integer between min and max. */
-function randomNumber(min = 0, max = 1) {
+function randomNumber(min = 0, max = 1): number {
   const num = Math.random() * (max - min) + min;
   return Math.floor(num);
 }
 
 /** Create the player Star. */
-function Player(props = {}, stage) {
+function Player(props = {}, stage): Konva.Star {
   const circle = Object.assign(props, {
     x: stage.width() / 2,
     y: stage.height() / 2,
     innerRadius: 10,
     outerRadius: 30,
     numPoints: 4,
-    fill: 'cyan',
-    stroke: 'black',
+    fill: '#fff',
+    stroke: '#000',
     strokeWidth: 4,
     name: 'fillShape',
   });
@@ -219,7 +232,7 @@ function Player(props = {}, stage) {
 }
 
 /** Combine two hex color values to a new hex color. */
-function addHexColor(c1, c2) {
+function addHexColor(c1, c2): string {
   let num = (parseInt(c1, 16) + parseInt(c2, 16)).toString();
   while (num.length < 6) { num = '0' + num; }
   return num;
