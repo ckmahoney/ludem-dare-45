@@ -1,14 +1,91 @@
+import color from 'color;'
 import Konva from 'konva';
 import Character from './Character';
 
 const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
 getRandomEasing();
 
-/** Create a square color enemy. */
-function createNPC(props = {}, stage, players: any[] = []): Konva.Rect {
+const oscillator = 1
+
+function createBackdrop(stage): Konva.Layer {
+  const backdrop = new Konva.Layer();
+  backdrop.add(new Konva.Rect({
+    id: 'backdrop',
+    fill: '#000000',
+    width: stage.width(),
+    height: stage.height(),
+    stroke: 'black', strokeWidth: 1
+  }));
+
+  return backdrop;
+}
+
+/** Setup and display the Konva.Stage. */
+export default function GameStage(props): Konva.Stage {
+  const dimensions = {width: 600, height: 400};
+  const stage = new Konva.Stage({
+    ...dimensions,
+    container: 'game',
+    key: 'GameStage'
+  });
+
+  const backdrop = createBackdrop(stage);
+  const player = Player({}, stage);
+  const container = stage.container();
+
+  npcs.forEach((node) => layer.add(node));
+  stage.add(backdrop);
+  stage.add(layer);
+  backdrop.draw();
+
+  // Craete the player shape. 
+  container.tabIndex = 1;
+  container.focus();
+  container.addEventListener('keydown', function(event) {
+    event.preventDefault();
+    // @ts-ignore
+
+    updatePosition(event, player);
+    // @ts-ignore;
+
+    const bounds = player.getClientRect();
+    layer.children.each(function(defender) {
+      // @ts-ignore 
+      if (defender == player) // Do not collide with self.
+        return;
+      // @ts-ignore
+      const bounds2 = defender.getClientRect();
+      if (hasIntersection(bounds, bounds2)) {
+        return handleIntersection(player, defender);
+      }
+    });
+
+    layer.batchDraw();
+  });
+
+  return stage;
+}
+
+const scene(stage, player, color, level): Konva.Layer {
+  const layer = new Konva.Layer();
+  const npcs = createFoes(stage, color, level);
+  layer.add(player);
+  layer.draw();
+}
+
+function createFoes(stage, color, level): Konva.Rect[] {
+  const numFoes = Math.pow(level, 2) + randomNumber(level, level * 2);
+  const npcs = [];
+  for (var id = 0; id < qty; id++) 
+    npcs.push(createNPC({color, id}, stage, player));
+
+  return npcs;
+}
+
+/** Create a square color Foe. */
+function createNPC(props = {}, stage, player): Konva.Rect {
   const x = randomNumber(0, stage.width());
   const y = randomNumber(0, stage.height());
-
   const rect = Object.assign({
     // @ts-ignore
     id: props.id,
@@ -34,81 +111,39 @@ function createNPC(props = {}, stage, players: any[] = []): Konva.Rect {
   if ((rect.y + rect.height) > stage.height())
     rect.y -= rect.height/2
 
+  if (isNearPlayer(player, rect)) // Create a safe space around the player. 
+    return createNPC(props, stage, player);
+ 
   const npc = new Konva.Rect(rect);
+  npc.cache();
 
-  // @ts-ignore 
-  if (players.some((p) => hasIntersection(p.getClientRect(), npc.getClientRect()))) {
-    // change the starting location.
-    return createNPC(props, stage, players); 
-  }
+  const velocity = randomNumber(50, 150);
+  const anim = new Konva.Animation(function(frame) {
+    const dist = velocity * (frame.timeDiff / 1000);
+    // @ts-ignore
+    const direction = (parseInt(npc.id()) + player.numPoints()) % 2 ? 'x' : 'y';
+    npc[direction](dist); // Repositions the element, affects collision.
+
+    if (npc.x() + npc.width() > stage.width())
+      npc.x(-npc.width()); // horizontal overflow
+
+    if (npc.y() + npc.height() > stage.height())
+      npc.y(-npc.height()); // vertical overflow
+  });
+
+  anim.start();
 
   return npc;
 }
 
-function createBackdrop(stage): Konva.Layer {
-  const backdrop = new Konva.Layer();
-  backdrop.add(new Konva.Rect({
-    id: 'backdrop',
-    fill: '#000000',
-    width: stage.width(),
-    height: stage.height(),
-    stroke: 'black', strokeWidth: 1
-  }));
+function isNearPlayer(playerBounds: Bounds, item: Bounds): boolean {
+  const playerBounds = player.getClientRect();
+  playerBounds.width += item.width;
+  playerBounds.height += item.height;
+  playerBounds.x -= item.width/2;
+  playerBounds.y -= item.height/2;
 
-  return backdrop;
-}
-
-/** Setup and display the Konva.Stage. */
-export default function GameStage(props): Konva.Stage {
-  const dimensions = {width: 600, height: 400};
-  const stage = new Konva.Stage({
-    ...dimensions,
-    container: 'game',
-    key: 'GameStage'
-  });
-
-  const backdrop = createBackdrop(stage);
-  const layer = new Konva.Layer();
-  const player = Player({}, stage);
-  const container = stage.container();
-  const npcs = colors.map((color, id) => createNPC({color, id}, stage, [player]));
-
-  npcs.forEach((node) => layer.add(node));
-  stage.add(backdrop);
-  stage.add(layer);
-  backdrop.draw();
-
-  // Craete the player shape. 
-  layer.add(player);
-  layer.draw();
-  
-  container.tabIndex = 1;
-  container.focus();
-  container.addEventListener('keydown', function(event) {
-    event.preventDefault();
-    // @ts-ignore
-
-    updatePosition(event, player);
-    // @ts-ignore;
-
-    const bounds = player.getClientRect();
-    layer.children.each(function(defender) {
-      // @ts-ignore 
-      if (defender == player) // Do not collide with self.
-        return;
-      // @ts-ignore
-      const bounds2 = defender.getClientRect();
-      if (hasIntersection(bounds, bounds2)) {
-        return handleIntersection(player, defender);
-      }
-    });
-
-    layer.batchDraw();
-  });
-
-  
-
-  return stage;
+  return hasIntersection(playerBounds, item);
 }
 
 /** Animate the background from dark to light. */
@@ -148,8 +183,6 @@ function handleIntersection(attacker, defender): boolean {
 
 /** Trigger endgame for the player. */
 function endGame(player, defender): void {
-  console.log("Player: " , player);
-  console.log("defender", defender);
   alert("You lose.");
   destroy(player);
   setTimeout(() => window.location.reload(), 1100);
@@ -257,14 +290,15 @@ function Player(props = {}, stage): Konva.Star {
     stroke: '#ffffff',
     strokeWidth: 4,
     name: 'fillShape',
+    shadowColor: '#ddd',
+    shadowOffset: {x: 2, y:3},
+    shadowBlur: 2
   });
 
   const player = new Konva.Star(star); 
 
   const anim = new Konva.Animation(function(frame) {
-    console.log('rotation', frame)
     const rotation = frame.frameRate / 1000 || 0;
-    console.log("rotation", rotation);
     // @ts-ignore
     player.rotate(rotation);
     player.draw()
@@ -294,15 +328,12 @@ function addHexColor(c1, c2): string {
   const g2 = extract(c2, 2);
   const b1 = extract(c1, 4);
   const b2 = extract(c2, 4);
-  console.log(r1, r2)
   // @ts-ignore
   let r = parseInt(r1 + r2).toString(16);
   // @ts-ignore
   let g = parseInt(g1 + g2).toString(16);
   // @ts-ignore
   let b = parseInt(b1 + b2).toString(16);
-
-  console.log("r, g, b, ", r, g, b);
 
   // Use `|| '00'` because 0 + 0 to.string() is 0 and results in too few characters.
   return `#${pad(r)}${pad(g)}${pad(b)}`; 
