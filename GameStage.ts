@@ -91,14 +91,14 @@ export default function GameStage(props): Konva.Stage {
     // @ts-ignore;
 
     const bounds = player.getClientRect();
-    layer.children.each(function(defense) {
+    layer.children.each(function(defender) {
       // @ts-ignore 
-      if (defense == player) // Do not collide with self.
+      if (defender == player) // Do not collide with self.
         return;
       // @ts-ignore
-      const bounds2 = defense.getClientRect();
+      const bounds2 = defender.getClientRect();
       if (hasIntersection(bounds, bounds2)) {
-        return handleIntersection(player, defense);
+        return handleIntersection(player, defender);
       }
     });
 
@@ -114,40 +114,48 @@ export default function GameStage(props): Konva.Stage {
 function updateBackground(player): void {
   const stage = player.getStage();
   const backdrop = stage.find('#backdrop')[0];
-  console.log("Found backdrop: " , backdrop);
   const fill = "#" + colors[player.numPoints() - 4];
-  const tween = getTween(backdrop, 2, {fill});
-  console.log("Fill: " , fill);
+  const tween = getTween(backdrop, 4, {fill});
   tween.play();
 }
 
+function updatePlayerColor(player): void {
+  const c1 = player.fill().replace('#', '');
+  const c2 = colors[player.numPoints() - 4];
+  const newFill = addHexColor(c1, c2);
+  console.log("newFill", newFill)
+  console.log("c1", c1, "c2", c2)
+  player.fill("#" + newFill);
+}
+
 /** Controller for player collision. */
-function handleIntersection(attack, defense): boolean {
- const approved = checkAttack(attack, defense);
+function handleIntersection(attacker, defender): boolean {
+ const approved = checkAttack(attacker, defender);
   if (approved) {
-    destroy(defense);
-    updateBackground(attack);
-    attack.numPoints(attack.numPoints() + 1);
+    destroy(defender);
+    updateBackground(attacker);
+    updatePlayerColor(attacker);
+    attacker.numPoints(attacker.numPoints() + 1);
   }
   else {
-    endGame(attack, defense);
+    endGame(attacker, defender);
   }
 
   return approved;
 }
 
 /** Trigger endgame for the player. */
-function endGame(player, defense): void {
+function endGame(player, defender): void {
   console.log("Player: " , player);
-  console.log("defense", defense);
+  console.log("defender", defender);
   alert("You lose.");
   destroy(player);
   setTimeout(() => window.location.reload(), 1100);
 }
 
-/** Parse an attack for victory or defeat. */
-function checkAttack(player, defense): boolean {
-  if (defense.id() == 'destroyed') 
+/** Parse an attacker for victory or defeat. */
+function checkAttack(player, defender): boolean {
+  if (defender.id() == 'destroyed') 
     return true; 
   /**
    * The Konva.Shape.Star has a default member #numPoints.
@@ -156,8 +164,8 @@ function checkAttack(player, defense): boolean {
    */ 
   const numWins = player.numPoints() - 4;
   
-  // Colors must be attacked in order of the rainbow (same order as colors array);
-  return numWins == defense.id();
+  // Colors must be attackered in order of the rainbow (same order as colors array);
+  return numWins == defender.id();
 }
 
 /** Remove a node from gameplay. */
@@ -243,8 +251,8 @@ function Player(props = {}, stage): Konva.Star {
     innerRadius: 10,
     outerRadius: 30,
     numPoints: 4,
-    fill: '#fff',
-    stroke: '#000',
+    fill: '#000000',
+    stroke: '#ffffff',
     strokeWidth: 4,
     name: 'fillShape',
   });
@@ -255,7 +263,30 @@ function Player(props = {}, stage): Konva.Star {
 
 /** Combine two hex color values to a new hex color. */
 function addHexColor(c1, c2): string {
-  let num = (parseInt(c1, 16) + parseInt(c2, 16)).toString();
-  while (num.length < 6) { num = '0' + num; }
-  return num;
+  c1 = c1.replace('#', '');
+  c2 = c2.replace('#', '');
+
+  if (c1.length == 3)
+    c1 += c1
+
+  if (c2.length == 3)
+    c2 += c2
+
+  const extract = (str, start) => parseInt(str.slice(start, start + 2));
+  const pad = (num) => num.length < 2 ? num + num : num;
+  const r1 = extract(c1, 0);
+  const r2 = extract(c2, 0);
+  const g1 = extract(c1, 2);
+  const g2 = extract(c2, 2);
+  const b1 = extract(c1, 4);
+  const b2 = extract(c2, 4);
+  // @ts-ignore
+  let r = parseInt(r1 + r2, 16).toString();
+  // @ts-ignore
+  let g = parseInt(g1 + g2, 16).toString();
+  // @ts-ignore
+  let b = parseInt(b1 + b2, 16).toString();
+
+  // Use `|| '00'` because 0 + 0 to.string() is 0 and results in too few characters.
+  return `#${pad(r)}${pad(g)}${pad(b)}`; 
 }
