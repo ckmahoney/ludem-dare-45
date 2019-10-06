@@ -55,6 +55,7 @@ function createStage(): Konva.Stage {
 
 /** Start a new instance of the game. */
 function initializeGame(stage): Konva.Stage {
+  console.log("Starting game");
   const player = Player({}, stage); 
   // @ts-ignore
   const Scenes = colors.reduce((scenes: Scene[], color, index) => {
@@ -102,7 +103,6 @@ function initializeGame(stage): Konva.Stage {
 
 export default function startGame(): void {
   const stage = createStage();
-  console.log("Started with stage", stage)
   const layer = new Konva.Layer();
   const titlecard = new Konva.Text({
     text: 'Starlight',
@@ -128,12 +128,10 @@ export default function startGame(): void {
   stage.add(layer);
   layer.draw();
 
-  // @ts-ignore
-  const container = stage.getContainer();
-  console.log("container", container)
-  container.addEventListener('keydown click', function(event) {
+  stage.on('keydown click', function(event) {
     console.log("keydown")
     layer.destroy();
+    stage.draw();
     initializeGame(stage);
   });
 }
