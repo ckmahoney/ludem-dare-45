@@ -35,6 +35,7 @@ function createNPC(props = {}, stage, players: any[] = []): Konva.Rect {
     rect.y -= rect.height/2
 
   const npc = new Konva.Rect(rect);
+
   // @ts-ignore 
   if (players.some((p) => hasIntersection(p.getClientRect(), npc.getClientRect()))) {
     // change the starting location.
@@ -119,13 +120,14 @@ function updateBackground(player): void {
   tween.play();
 }
 
+/** Animate the player's fill to reflect game progress. */
 function updatePlayerColor(player): void {
-  const c1 = player.fill().replace('#', '');
-  const c2 = colors[player.numPoints() - 4];
-  const newFill = addHexColor(c1, c2);
-  console.log("newFill", newFill)
-  console.log("c1", c1, "c2", c2)
-  player.fill("#" + newFill);
+  // const c1 = player.fill().replace('#', '');
+  // const c2 = colors[player.numPoints() - 4];
+  // const fill = "#" + addHexColor(c1, c2);
+  // const tween = getTween(player, 4, {fill});
+  // tween.play();
+  // console.log("player.fill()", player.fill());
 }
 
 /** Controller for player collision. */
@@ -134,7 +136,7 @@ function handleIntersection(attacker, defender): boolean {
   if (approved) {
     destroy(defender);
     updateBackground(attacker);
-    updatePlayerColor(attacker);
+    // updatePlayerColor(attacker);
     attacker.numPoints(attacker.numPoints() + 1);
   }
   else {
@@ -245,7 +247,7 @@ function randomNumber(min = 0, max = 1): number {
 
 /** Create the player Star. */
 function Player(props = {}, stage): Konva.Star {
-  const circle = Object.assign(props, {
+  const star = Object.assign(props, {
     x: stage.width() / 2,
     y: stage.height() / 2,
     innerRadius: 10,
@@ -257,7 +259,19 @@ function Player(props = {}, stage): Konva.Star {
     name: 'fillShape',
   });
 
-  const player = new Konva.Star(circle); 
+  const player = new Konva.Star(star); 
+
+  const anim = new Konva.Animation(function(frame) {
+    console.log('rotation', frame)
+    const rotation = frame.frameRate / 1000 || 0;
+    console.log("rotation", rotation);
+    // @ts-ignore
+    player.rotate(rotation);
+    player.draw()
+  });
+
+  anim.start()
+
   return player;
 }
 
@@ -273,19 +287,22 @@ function addHexColor(c1, c2): string {
     c2 += c2
 
   const extract = (str, start) => parseInt(str.slice(start, start + 2));
-  const pad = (num) => num.length < 2 ? num + num : num;
+  const pad = (num) => num.length < 2 ? '0' + num : num;
   const r1 = extract(c1, 0);
   const r2 = extract(c2, 0);
   const g1 = extract(c1, 2);
   const g2 = extract(c2, 2);
   const b1 = extract(c1, 4);
   const b2 = extract(c2, 4);
+  console.log(r1, r2)
   // @ts-ignore
-  let r = parseInt(r1 + r2, 16).toString();
+  let r = parseInt(r1 + r2).toString(16);
   // @ts-ignore
-  let g = parseInt(g1 + g2, 16).toString();
+  let g = parseInt(g1 + g2).toString(16);
   // @ts-ignore
-  let b = parseInt(b1 + b2, 16).toString();
+  let b = parseInt(b1 + b2).toString(16);
+
+  console.log("r, g, b, ", r, g, b);
 
   // Use `|| '00'` because 0 + 0 to.string() is 0 and results in too few characters.
   return `#${pad(r)}${pad(g)}${pad(b)}`; 
