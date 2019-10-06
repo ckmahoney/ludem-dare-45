@@ -2,6 +2,8 @@ const color = require('color');
 import Konva from 'konva';
 import Character from './Character';
 
+const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
+
 type Bounds = {
   width: number
   height: number
@@ -14,11 +16,10 @@ type Scene = {
   level: number
   numFoes: number
   complete: boolean
+  layer: null | Konva.Layer
   startScene: Function
-  layer: Konva.Layer
+  onComplete?: Function
 }
-
-const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
 
 function createBackdrop(stage): Konva.Layer {
   const backdrop = new Konva.Layer();
@@ -52,35 +53,42 @@ function createStage(props): Konva.Stage {
 }
 
 /** Start a new instance of the game. */
-function startGame(props) {
+export default function startGame(props) {
   const stage = createStage(props);
   const player = Player({}, stage); 
   // @ts-ignore
-  const Scenes = colors.reduce((scenes: Scene[], color, level) => {
-
+  const Scenes = colors.reduce((scenes: Scene[], color, index) => {
+    console.log("startGame().callback.scenes: " , scenes);
     const scene: Scene = {
       color,
-      level,
-      layer: new Konva.Layer(),
+      level: index + 1,
       numFoes: 0,
+      layer: null,
       complete: false,
       // @ts-ignore
       startScene: function(resolve) {
-        createScene(stage, player, color, level);
-        if (Scenes[level + 1]) {
-          resolve(Scenes[level + 1].startScene());
+        console.log("Starting scene " + this.level);
+        this.layer = createScene(stage, player, color, this.level);
+        while (!this.complete)
+          return;
+
+        if (Scenes[index - 1]) 
+          Scenes[index-1].layer.destroy();
+
+        if (Scenes[index + 1]) {
+          // @ts-ignore
+          this.onComplete = Promise.resolve(Scenes[level + 1].startScene());
         }
         else {
-          alert('You won!');
+          this.onComplete = () => alert('You won!');
         }
       }
     }
     scenes.push(scene);
-  }, [])
+    return scenes;
+  }, []);
 
-  new Promise((resolve, rej) => {
-    Scenes[0].startScene(resolve);
-  }).then()
+  Scenes[0].startScene(Promise.resolve);
 
 }
 
@@ -116,6 +124,7 @@ function createScene(stage, player, color, level): Konva.Layer {
   const layer = new Konva.Layer();
   const npcs = createFoes(stage, player, color, level);
   npcs.forEach((n) => layer.add(n));
+  stage.add(layer);
   layer.draw();
   return layer;
 }
@@ -126,11 +135,13 @@ function createFoes(stage, player, color, level): Konva.Rect[] {
   for (var id = 0; id < qty; id++) 
     npcs.push(createNPC({color, id}, stage, player));
 
+  console.log("CreateFoes()", npcs);
   return npcs;
 }
 
 /** Create a square color Foe. */
 function createNPC(props = {}, stage, player): Konva.Rect {
+  console.log("Creating npc")
   const x = randomNumber(0, stage.width());
   const y = randomNumber(0, stage.height());
   const rect = Object.assign({
@@ -146,41 +157,55 @@ function createNPC(props = {}, stage, player): Konva.Rect {
     name: 'fillShape'
   }, props);
 
-  if ((rect.x - rect.width) < 0)
-    rect.x += rect.width/2
-
-  if ((rect.x + rect.width) > stage.width())
-    rect.x -= rect.width/2
-
-  if ((rect.y - rect.height) < 0)
-    rect.y += rect.height/2
-
-  if ((rect.y + rect.height) > stage.height())
-    rect.y -= rect.height/2
-
   if (isNearPlayer(player, rect)) // Create a safe space around the player. 
     return createNPC(props, stage, player);
  
+
   const npc = new Konva.Rect(rect);
+  maintainBounds(npc, stage);
   npc.cache();
 
-  const velocity = randomNumber(50, 150);
-  const anim = new Konva.Animation(function(frame) {
-    const dist = velocity * (frame.timeDiff / 1000);
-    // @ts-ignore
-    const direction = (parseInt(npc.id()) + player.numPoints()) % 2 ? 'x' : 'y';
-    npc[direction](dist); // Repositions the element, affects collision.
+  // const velocity = randomNumber(50, 150);
+  // const anim = new Konva.Animation(function(frame) {
+  //   const dist = velocity * (frame.timeDiff / 1000);
+  //   // @ts-ignore
+  //   const direction = (parseInt(npc.id()) + player.numPoints()) % 2 ? 'x' : 'y';
+  //   npc[direction](dist); // Repositions the element, affects collision.
 
-    if (npc.x() + npc.width() > stage.width())
-      npc.x(-npc.width()); // horizontal overflow
+  //   maintainBounds(npc, stage);
 
-    if (npc.y() + npc.height() > stage.height())
-      npc.y(-npc.height()); // vertical overflow
-  });
+  //   if (npc.x() + npc.width() > stage.width())
+  //     npc.x(-npc.width()); // horizontal overflow
 
-  anim.start();
+  //   if (npc.y() + npc.height() > stage.height())
+  //     npc.y(-npc.height()); // vertical overflow
+  // });
+
+  // anim.start();
 
   return npc;
+}
+
+/** Updates node bounds in place to stay on canvas. */
+function maintainBounds(node, stage): Konva.Node {
+  const x = node.x();
+  const y =  node.y();
+  const width = node.width();
+  const height = node.height();
+
+  if (x - width < 0)
+    node.x(x + width/2);
+
+  if (x + width > stage.width())
+    node.x(x - node.width/2);
+
+  if (y - height < 0)
+    node.y(y + node.height/2);
+
+  if (y + height > stage.height())
+    node.y(y - node.height/2);
+
+  return node;
 }
 
 function isNearPlayer(player, item: Bounds): boolean {
@@ -240,9 +265,9 @@ function checkAttack(player, defender): boolean {
   if (defender.id() == 'destroyed') 
     return true; 
   /**
-   * The Konva.Shape.Star has a default member #numPoints.
-   * To play nice with Konva out of the box, use this getter/setter
-   * for auto updates. #numPoints starts at 4 by default. 
+   * The Konva.Shape.Star has a default getter/setter #numPoints.
+   * To play nice with Konva out of the box, use this method
+   * to update on draw callbacks. numPoints() starts at 4 by default. 
    */ 
   const numWins = player.numPoints() - 4;
   
@@ -273,7 +298,6 @@ function getRandomTween(node, duration = 0.3, props = {}): Konva.Tween {
   const stage = node.getStage();
   const x = randomNumber(0, stage.width());
   const y = randomNumber(0, stage.height());
-
   const tween = new Konva.Tween(Object.assign({
     x, 
     y,
@@ -351,7 +375,7 @@ function Player(props = {}, stage): Konva.Star {
     player.draw()
   });
 
-  anim.start()
+  // anim.start()
 
   return player;
 }
