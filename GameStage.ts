@@ -2,9 +2,6 @@ const color = require('color');
 import Konva from 'konva';
 import Character from './Character';
 
-const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
-const frameRate = 1/60;
-
 type Bounds = {
   width: number
   height: number
@@ -16,11 +13,47 @@ type Scene = {
   color: string
   level: number
   numFoes: number
-  complete: boolean
   layer: null | Konva.Layer
   start: Function
   onComplete?: Function
 }
+
+type Player = Konva.Star & {
+  scenes: any
+  ref: any
+  score: number
+  kills: number
+  level: number
+  scene: any
+}
+
+const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
+// const colors: string[] = ['FF0000',  '00FF00', '0000FF'];
+const frameRate = 1/60;
+let started = false;
+// @ts-ignore
+let _player = {}
+
+function resetPlayer(): Player {
+  for (var i in _player) 
+    delete _player[i];
+
+  _player = {};
+
+  // @ts-ignore
+  _player = {
+    scenes: null,
+    ref: null,
+    score: 0,
+    kills: 0,
+    level: 0, 
+    scene: null
+  };
+ 
+
+  // @ts-ignore
+  return _player;
+} // use a quickfix global for referencing the Player. 
 
 function createBackdrop(stage): Konva.Layer {
   const backdrop = new Konva.Layer();
@@ -55,26 +88,30 @@ function createStage(): Konva.Stage {
 
 /** Start a new instance of the game. */
 function initializeGame(stage): Konva.Stage {
-  console.log("Starting game");
   const player = Player({}, stage); 
   // @ts-ignore
-  const Scenes = colors.reduce((scenes: Scene[], color, index) => {
+  const Scenes = _player.scenes = colors.reduce((scenes: Scene[], color, index) => {
     const scene: Scene = {
       color,
       level: index + 1,
       numFoes: 0,
       layer: null,
-      complete: false,
       // @ts-ignore
       start: function() {
         this.layer = createScene(stage, player, color, this.level);
         this.layer.add(player);
-        initLayerListeners(stage, this.layer, player)
-        this.layer.draw()
+        // debugger;
+        initLayerListeners(stage, this.layer, player);
+        this.layer.draw();
+        this.numFoes = this.layer.children.length - 1
+        // @ts-ignore
+        _player.scene = this;
       },
-      onComplete:  function() {
-        // Make the player's Star more pointy.
-        player.numPoints(player.numPoints() + 1);
+      onComplete: function() {
+        // @ts-ignore
+        _player.score += player.kills;
+        // @ts-ignore
+        _player.kills = 0;
 
         if (Scenes[index - 1]) {
           // @ts-ignore object is possibly null
@@ -86,7 +123,9 @@ function initializeGame(stage): Konva.Stage {
           Scenes[index + 1].start()
         }
         else {
-          alert('You won!');
+          // @ts-ignore
+          this.layer.destroy();
+          showVictory(stage);
         }
       }
     }
@@ -101,7 +140,36 @@ function initializeGame(stage): Konva.Stage {
   return stage;
 }
 
-export default function startGame(): void {
+function showVictory(stage) {
+  const text = new Konva.Text({
+    text: 'The universe is safe now\n thanks to you',
+    fill: 'white',
+    x: 30, 
+    y: 130,
+    fontSize: 40
+  });
+
+  const win = new Konva.Text({
+    text: 'YOU WIN',
+    fill: 'cyan',
+    x: 30,
+    y: 220,
+    fontSize: 75
+  });
+
+  const layer = new Konva.Layer();
+  layer.add(text);
+  layer.add(win);
+  stage.add(layer);
+  layer.draw();
+  stage.batchDraw();
+}
+
+/** Show a title card, then the first scene. */
+export default function startGame(audio): void {
+  if (audio)
+    // @ts-ignore;
+    window.audio = audio
   const stage = createStage();
   const layer = new Konva.Layer();
   const titlecard = new Konva.Text({
@@ -120,7 +188,7 @@ export default function startGame(): void {
     x: 30,
     y: 200,
     fill: 'white',
-    fontSize: 16
+    fontSize: 14  
   });
 
   layer.add(titlecard);
@@ -129,13 +197,22 @@ export default function startGame(): void {
   layer.draw();
 
   stage.on('keydown click', function(event) {
-    console.log("keydown")
+    // @ts-ignore
+    if (started)
+      return;
+    if (!audio.playing)
+      audio.play();
+
+    // @ts-ignore
+    started = true;
+    layer.destroyChildren();
     layer.destroy();
     stage.draw();
     initializeGame(stage);
   });
 }
 
+/** Display the text on titlecard for how to play. */
 function getInstructionText(): string {
   return `
     You are a galactic empire condensed into a single star.\n
@@ -143,18 +220,20 @@ function getInstructionText(): string {
     It is your noble duty to DESTROY ALL COLOR\n
     use the arrow keys to move your starship\n
     press 'e' or 'f' to fire your lazzer\n
-    spin your starship using 'w' or 'r'
+    spin your starship using 'w' or 'r'\n
+    CLICK TO START
   `;
 }
 
 /** Assign keydown listeners for movement. */
-function initLayerListeners(stage: Konva.Stage, layer: Konva.Layer, player: Konva.Star) {
+function initLayerListeners(stage: Konva.Stage, layer: Konva.Layer, player: Player) {
   // @ts-ignore
   const container = stage.getContainer();
   container.tabIndex = 1;
   container.focus();
   container.addEventListener('keydown', function(event) {
     event.preventDefault();
+    // debugger;
     updatePosition(event, player);
 
     if (event.keyCode == 18 || event.key == 'r') {
@@ -177,7 +256,7 @@ function initLayerListeners(stage: Konva.Stage, layer: Konva.Layer, player: Konv
     // @ts-ignore
     const bounds = player.getClientRect();
     layer.children.each(function(child) {
-      if (child.name() != 'npc') 
+      if (child.name() != 'npc' || !player || !child) 
         return;
 
       checkCollision(player, child);
@@ -187,9 +266,9 @@ function initLayerListeners(stage: Konva.Stage, layer: Konva.Layer, player: Konv
   });
 }
 
-
 /** Shoots a lazzerbeam from teh head of teh player. */
-function createLazzer(player: Konva.Star, layer: Konva.Layer): Konva.Circle {
+function createLazzer(player: Player, layer: Konva.Layer): Konva.Circle {
+    // @ts-ignore
   const theta = player.rotation();
   const circle = {
     radius: 1,
@@ -205,25 +284,30 @@ function createLazzer(player: Konva.Star, layer: Konva.Layer): Konva.Circle {
   const lazzer = new Konva.Circle(circle);
   layer.add(lazzer);
 
-  const speed = player.numPoints() - 3;
-  setInterval(function moveLazzer() {
+  const speed = 10;
+
+  const clearLazzer = setInterval(function moveLazzer() {
+      // @ts-ignore;
      if (isOutOfBounds(lazzer, layer.getStage())) {
+        // @ts-ignore
+        lazzer.destroyed = true;
+        clearTimeout(clearLazzer)
         return lazzer.destroy();
      }
 
      let x = lazzer.x();
      let y = lazzer.y();
 
-     if (theta == 0) 
+     if (theta <= 0 && theta < 90)
        lazzer.y(y - speed);
-     if (theta == 90)
+     if (theta <= 90 && theta < 180)
        lazzer.x(x - speed);
-     if (theta == 180)
+     if (theta <= 180 && theta < 270)
        lazzer.y(y + speed);
-     if (theta == 270)
+     if (theta <= 270 && theta < 360)
        lazzer.x(x + speed);
 
-     lazzer.draw();
+     layer.draw();
 
      layer.children.each(function(child) {
       if (child == lazzer || child == player)
@@ -257,7 +341,7 @@ function createScene(stage, player, color, level): Konva.Layer {
 function createFoes(stage, player, color, level): Konva.Rect[] {
   const qty = Math.pow(level, 2) + randomNumber(level, level * 2);
   const npcs: Konva.Rect[] = [];
-  for (var id = 0; id < qty; id++) 
+  for (var id = 0; id < qty; id++)
     npcs.push(createNPC({color, id}, stage, player));
 
   return npcs;
@@ -287,28 +371,13 @@ function createNPC(props = {}, stage, player): Konva.Rect {
   maintainBounds(npc, stage);
   npc.cache();
 
-  // const velocity = randomNumber(50, 150);
-  // const anim = new Konva.Animation(function(frame) {
-  //   const dist = velocity * (frame.timeDiff / 1000);
-  //   // @ts-ignore
-  //   const direction = (parseInt(npc.id()) + player.numPoints()) % 2 ? 'x' : 'y';
-  //   npc[direction](dist); // Repositions the element, affects collision.
-
-  //   maintainBounds(npc, stage);
-
-  //   if (npc.x() + npc.width() > stage.width())
-  //     npc.x(-npc.width()); // horizontal overflow
-
-  //   if (npc.y() + npc.height() > stage.height())
-  //     npc.y(-npc.height()); // vertical overflow
-  // });
-
-  // anim.start();
-
   return npc;
 }
 
 function isOutOfBounds(node, stage): boolean {
+  if (!node || !stage)
+    return true;
+
   const x = node.x();
   const y =  node.y();
   const width = node.width();
@@ -323,6 +392,10 @@ function isOutOfBounds(node, stage): boolean {
 
 /** Updates node bounds in place to stay on canvas. */
 function maintainBounds(node, stage): Konva.Node {
+  if (!stage || !node) 
+    return node; // resetting the game;
+
+
   if (!isOutOfBounds(node, stage))
     return node;
 
@@ -330,7 +403,6 @@ function maintainBounds(node, stage): Konva.Node {
   const y =  node.y();
   const width = node.width();
   const height = node.height();
-
   if (x - width < 0)
     node.x(x + width/2);
 
@@ -348,10 +420,10 @@ function maintainBounds(node, stage): Konva.Node {
 
 function isNearPlayer(player, item: Bounds): boolean {
   const playerBounds = player.getClientRect();
-  playerBounds.width += item.width;
-  playerBounds.height += item.height;
-  playerBounds.x -= item.width/2;
-  playerBounds.y -= item.height/2;
+  playerBounds.width += item.width * 2;
+  playerBounds.height += item.height * 2;
+  playerBounds.x -= item.width;
+  playerBounds.y -= item.height;
 
   return hasIntersection(playerBounds, item);
 }
@@ -359,52 +431,62 @@ function isNearPlayer(player, item: Bounds): boolean {
 /** Animate the background from dark to light. */
 function updateBackground(player): void {
   const stage = player.getStage();
+  if (!stage)
+    return; // quickfix
   const backdrop = stage.find('#backdrop')[0];
   const fill = "#" + colors[player.numPoints() - 4];
   const tween = getTween(backdrop, 4, {fill});
   tween.play();
 }
 
-/** Animate the player's fill to reflect game progress. */
-function updatePlayerColor(player): void {
-  // const c1 = player.fill().replace('#', '');
-  // const c2 = colors[player.numPoints() - 4];
-  // const fill = "#" + addHexColor(c1, c2);
-  // const tween = getTween(player, 4, {fill});
-  // tween.play();
-  // console.log("player.fill()", player.fill());
+function checkStageComplete() {
+  // @ts-ignore;
+  if (_player.kills == _player.scene.numFoes) {
+    // @ts-ignore
+    _player.scene.onComplete();
+  }
 }
 
 /** Controller for player collision. */
-function handleCollision(attacker, defender): boolean {
- const approved = checkAttack(attacker, defender);
-
-  if (approved) {
+function handleCollision(attacker, defender): void {
+  if (attacker.name() == 'lazzer' || attacker.name() == 'player') {
     destroy(defender);
-    if (attacker.name() == 'lazzer')
-      attacker.destroy();
 
-    updateBackground(attacker);
-    // updatePlayerColor(attacker);
-  }
-  else {
-    endGame(attacker, defender);
-  }
+    if (!defender.destroyed) {
+      defender.destroyed = true;
 
-  return approved;
+      if (attacker.name() == 'lazzer') {
+        attacker.destroy();
+      }
+      
+      // @ts-ignore;
+      _player.kills++;
+      checkStageComplete();
+      updateBackground(attacker);
+    }
+  }
 }
 
 /** Trigger endgame for the player. */
 function endGame(player, defender): void {
-  alert("You lose.");
-  destroy(player);
-  debugger;
-  setTimeout(() => window.location.reload(), 1100);
+  const stage = player.getStage();
+  player.destroy();
+  resetPlayer();
+  setTimeout(() => {
+    started = false;
+    stage.destroy();
+    // @ts-ignore
+    startGame(window.audio);
+
+  }, 1200);
 }
 
 /** Parse an attacker for victory or defeat. */
 function checkAttack(attacker, defender): boolean {
-  return attacker.name() !== 'npc';
+  if (defender.destroyed)
+    return false;
+
+  return attacker.name() == 'lazzer';
 
   if (defender.id() == 'destroyed') 
     return true; 
@@ -494,7 +576,8 @@ function randomNumber(min = 0, max = 1): number {
 }
 
 /** Create the player Star. */
-function Player(props = {}, stage): Konva.Star {
+function Player(props = {}, stage): any {
+  resetPlayer();
   const star = Object.assign(props, {
     x: stage.width() / 2,
     y: stage.height() / 2,
@@ -511,17 +594,9 @@ function Player(props = {}, stage): Konva.Star {
     shadowBlur: 2
   });
 
-  const player = new Konva.Star(star); 
-
-  // const anim = new Konva.Animation(function(frame) {
-  //   const rotation = frame.frameRate / 1000 || 0;
-  //   // @ts-ignore
-  //   player.rotate(rotation);
-  //   player.draw()
-  // });
-
-  // anim.start()
-
+  // @ts-ignore
+  const player = new Konva.Star(star);
+  _player = Object.assign({}, player, _player);
   return player;
 }
 
