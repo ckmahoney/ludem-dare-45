@@ -44,36 +44,43 @@ function createNPC(props = {}, stage, players: any[] = []): Konva.Rect {
   return npc;
 }
 
+function createBackdrop(stage): Konva.Layer {
+  const backdrop = new Konva.Layer();
+  backdrop.add(new Konva.Rect({
+    id: 'backdrop',
+    fill: '#000000',
+    width: stage.width(),
+    height: stage.height(),
+    stroke: 'black', strokeWidth: 1
+  }));
+
+  return backdrop;
+}
+
 /** Setup and display the Konva.Stage. */
 export default function GameStage(props): Konva.Stage {
   const dimensions = {width: 600, height: 400};
   const stage = new Konva.Stage({
     ...dimensions,
     container: 'game',
-    key: 'GameStage',
-    onClick: (e) => {console.log("click", e)}
+    key: 'GameStage'
   });
 
-  const init: any[] = props.data.filter(d => d.type == 'character');
-  const characters = [];
+  const backdrop = createBackdrop(stage);
   const layer = new Konva.Layer();
-  const outline = new Konva.Layer();
   const player = Player({}, stage);
   const container = stage.container();
   const npcs = colors.map((color, id) => createNPC({color, id}, stage, [player]));
 
   npcs.forEach((node) => layer.add(node));
-  
-  // Create the visible bounding box for the canvas. 
-  outline.add(new Konva.Rect({...dimensions, stroke: 'black', strokeWidth: 1}))
+  stage.add(backdrop);
   stage.add(layer);
-  stage.add(outline);
-  outline.draw();
+  backdrop.draw();
 
   // Craete the player shape. 
   layer.add(player);
   layer.draw();
-
+  
   container.tabIndex = 1;
   container.focus();
   container.addEventListener('keydown', function(event) {
@@ -98,14 +105,19 @@ export default function GameStage(props): Konva.Stage {
     layer.batchDraw();
   });
 
+  
+
   return stage;
 }
 
 /** Animate the background from dark to light. */
 function updateBackground(player): void {
   const stage = player.getStage();
-  const fill = colors[player.numPoints() - 4];
-  const tween = getRandomTween(stage, 2, {fill});
+  const backdrop = stage.find('#backdrop')[0];
+  console.log("Found backdrop: " , backdrop);
+  const fill = "#" + colors[player.numPoints() - 4];
+  const tween = getTween(backdrop, 2, {fill});
+  console.log("Fill: " , fill);
   tween.play();
 }
 
@@ -154,6 +166,16 @@ function destroy(node): void {
   const tween = getRandomTween(node, duration);
   tween.play();
   setTimeout(() => node.destroy(), duration * 1000);
+}
+
+/** Provides a tween with intentional props. */
+function getTween(node, duration, props): Konva.Tween {
+  return getRandomTween(node, duration, Object.assign({
+    width: node.width(),
+    height: node.height(),
+    x: node.x(),
+    y: node.y()
+  }, props));
 }
 
 /** Get parameters for an objects kill animation. */
