@@ -3,6 +3,7 @@ import Konva from 'konva';
 import Character from './Character';
 
 const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
+const frameRate = 1/60;
 
 type Bounds = {
   width: number
@@ -35,7 +36,7 @@ function createBackdrop(stage): Konva.Layer {
 }
 
 /** Setup and display the Konva.Stage. */
-function createStage(props): Konva.Stage {
+function createStage(): Konva.Stage {
   const dimensions = {width: 600, height: 400};
   const stage = new Konva.Stage({
     ...dimensions,
@@ -53,8 +54,7 @@ function createStage(props): Konva.Stage {
 }
 
 /** Start a new instance of the game. */
-export default function startGame(props): Konva.Stage {
-  const stage = createStage(props);
+function initializeGame(stage): Konva.Stage {
   const player = Player({}, stage); 
   // @ts-ignore
   const Scenes = colors.reduce((scenes: Scene[], color, index) => {
@@ -66,17 +66,15 @@ export default function startGame(props): Konva.Stage {
       complete: false,
       // @ts-ignore
       start: function() {
-        console.log("Starting scene " + this.level);
-        console.log("Player: " , player)
-        console.log("Player.rotate() " , player.rotate)
         this.layer = createScene(stage, player, color, this.level);
         this.layer.add(player);
-        console.log("Player: " , player)
-        console.log("Player.rotate() " , player.rotate)
         initLayerListeners(stage, this.layer, player)
         this.layer.draw()
       },
       onComplete:  function() {
+        // Make the player's Star more pointy.
+        player.numPoints(player.numPoints() + 1);
+
         if (Scenes[index - 1]) {
           // @ts-ignore object is possibly null
           Scenes[index - 1].layer.destroy();
@@ -91,16 +89,69 @@ export default function startGame(props): Konva.Stage {
         }
       }
     }
+
     scenes.push(scene);
     return scenes;
   }, []);
+
+  stage.draw();
 
   Scenes[0].start();
   return stage;
 }
 
+export default function startGame(): void {
+  const stage = createStage();
+  console.log("Started with stage", stage)
+  const layer = new Konva.Layer();
+  const titlecard = new Konva.Text({
+    text: 'Starlight',
+    x: 130,
+    y: 130,
+    fill: 'white',
+    sroke: 'cyan', 
+    fontSize: 60,
+    shadowColor: '#aaa',
+    shadowOffset: {x: 3, y: 5}
+  });
+
+  const instructions = new Konva.Text({
+    text: getInstructionText(),
+    x: 30,
+    y: 200,
+    fill: 'white',
+    fontSize: 16
+  });
+
+  layer.add(titlecard);
+  layer.add(instructions);
+  stage.add(layer);
+  layer.draw();
+
+  // @ts-ignore
+  const container = stage.getContainer();
+  console.log("container", container)
+  container.addEventListener('keydown click', function(event) {
+    console.log("keydown")
+    layer.destroy();
+    initializeGame(stage);
+  });
+}
+
+function getInstructionText(): string {
+  return `
+    You are a galactic empire condensed into a single star.\n
+    The arch nemesis, COLOR, has split itself into thousands of pieces.\n
+    It is your noble duty to DESTROY ALL COLOR\n
+    use the arrow keys to move your starship\n
+    press 'e' or 'f' to fire your lazzer\n
+    spin your starship using 'w' or 'r'
+  `;
+}
+
 /** Assign keydown listeners for movement. */
-function initLayerListeners(stage, layer, player) {
+function initLayerListeners(stage: Konva.Stage, layer: Konva.Layer, player: Konva.Star) {
+  // @ts-ignore
   const container = stage.getContainer();
   container.tabIndex = 1;
   container.focus();
@@ -109,38 +160,91 @@ function initLayerListeners(stage, layer, player) {
     updatePosition(event, player);
 
     if (event.keyCode == 18 || event.key == 'r') {
+      // @ts-ignore
       const rotation = parseInt(player.rotation()) + 2;
       player.rotation(rotation).draw();
     }
 
     if (event.keyCode == 87 || event.key == 'w') { 
+      // @ts-ignore
       const rotation = parseInt(player.rotation()) - 2;
       player.rotation(rotation);
     }
 
     const FIRE = [69, 70, 'e', 'f'];
     if (FIRE.includes(event.keyCode) || FIRE.includes(event.key)) {
-      createProjectile(player);
+      createLazzer(player, layer);
     }
 
+    // @ts-ignore
     const bounds = player.getClientRect();
-    layer.children.each(function(defender) {
-      if (defender == player) // Do not collide with self.
+    layer.children.each(function(child) {
+      if (child.name() != 'npc') 
         return;
-      const bounds2 = defender.getClientRect();
-      if (hasIntersection(bounds, bounds2)) {
-        console.log(bounds, bounds2);
-        // return handleIntersection(player, defender);
-      }
+
+      checkCollision(player, child);
     });
 
     layer.batchDraw();
   });
 }
 
-function createProjectile(player) {
-  
+
+/** Shoots a lazzerbeam from teh head of teh player. */
+function createLazzer(player: Konva.Star, layer: Konva.Layer): Konva.Circle {
+  const theta = player.rotation();
+  const circle = {
+    radius: 1,
+    x: player.x(),
+    y: player.y(),
+    name: 'lazzer',
+    width: 2,
+    height: 10,
+    fill: 'white',
+    stroke: 'white'
+  }
+
+  const lazzer = new Konva.Circle(circle);
+  layer.add(lazzer);
+
+  const speed = player.numPoints() - 3;
+  setInterval(function moveLazzer() {
+     if (isOutOfBounds(lazzer, layer.getStage())) {
+        return lazzer.destroy();
+     }
+
+     let x = lazzer.x();
+     let y = lazzer.y();
+
+     if (theta == 0) 
+       lazzer.y(y - speed);
+     if (theta == 90)
+       lazzer.x(x - speed);
+     if (theta == 180)
+       lazzer.y(y + speed);
+     if (theta == 270)
+       lazzer.x(x + speed);
+
+     lazzer.draw();
+
+     layer.children.each(function(child) {
+      if (child == lazzer || child == player)
+        return;
+ 
+      checkCollision(lazzer, child);
+     });
+  }, frameRate * 1000);
+
+  layer.draw();
+
+  return lazzer;
 }
+
+function checkCollision(node1, node2) {
+   if (hasIntersection(node1.getClientRect(), node2.getClientRect())) {
+     handleCollision(node1, node2);
+   }
+ }
 
 /** Creates opponents for a new scene based on color. */
 function createScene(stage, player, color, level): Konva.Layer {
@@ -163,7 +267,6 @@ function createFoes(stage, player, color, level): Konva.Rect[] {
 
 /** Create a square color Foe. */
 function createNPC(props = {}, stage, player): Konva.Rect {
-  console.log("Creating npc")
   const x = randomNumber(0, stage.width());
   const y = randomNumber(0, stage.height());
   const rect = Object.assign({
@@ -171,12 +274,12 @@ function createNPC(props = {}, stage, player): Konva.Rect {
     id: props.id,
     x, 
     y,
+    name: 'npc',
     width: 40,
     height: 40,
     stroke: 'white',
     // @ts-ignore,
     fill: "#" + props.color,
-    name: 'fillShape'
   }, props);
 
   if (isNearPlayer(player, rect)) // Create a safe space around the player. 
@@ -207,8 +310,24 @@ function createNPC(props = {}, stage, player): Konva.Rect {
   return npc;
 }
 
+function isOutOfBounds(node, stage): boolean {
+  const x = node.x();
+  const y =  node.y();
+  const width = node.width();
+  const height = node.height();
+
+  return (
+    x - width < 0 || 
+    x + width > stage.width() ||
+    y - height < 0 ||
+    y + height > stage.height())
+}
+
 /** Updates node bounds in place to stay on canvas. */
 function maintainBounds(node, stage): Konva.Node {
+  if (!isOutOfBounds(node, stage))
+    return node;
+
   const x = node.x();
   const y =  node.y();
   const width = node.width();
@@ -259,15 +378,16 @@ function updatePlayerColor(player): void {
 }
 
 /** Controller for player collision. */
-function handleIntersection(attacker, defender): boolean {
-
+function handleCollision(attacker, defender): boolean {
  const approved = checkAttack(attacker, defender);
 
   if (approved) {
     destroy(defender);
+    if (attacker.name() == 'lazzer')
+      attacker.destroy();
+
     updateBackground(attacker);
     // updatePlayerColor(attacker);
-    attacker.numPoints(attacker.numPoints() + 1);
   }
   else {
     endGame(attacker, defender);
@@ -280,11 +400,14 @@ function handleIntersection(attacker, defender): boolean {
 function endGame(player, defender): void {
   alert("You lose.");
   destroy(player);
+  debugger;
   setTimeout(() => window.location.reload(), 1100);
 }
 
 /** Parse an attacker for victory or defeat. */
-function checkAttack(player, defender): boolean {
+function checkAttack(attacker, defender): boolean {
+  return attacker.name() !== 'npc';
+
   if (defender.id() == 'destroyed') 
     return true; 
   /**
@@ -292,10 +415,10 @@ function checkAttack(player, defender): boolean {
    * To play nice with Konva out of the box, use this method
    * to update on draw callbacks. numPoints() starts at 4 by default. 
    */ 
-  const numWins = player.numPoints() - 4;
+  // const numWins = player.numPoints() - 4;
   
   // Colors must be attackered in order of the rainbow (same order as colors array);
-  return numWins == defender.id();
+  // return numWins == defender.id();
 }
 
 /** Remove a node from gameplay. */
@@ -352,7 +475,6 @@ function hasIntersection(rect1, rect2): boolean {
 
 /** Parse a keystroke into a player movement; update the player position. */
 function updatePosition(event, object): void {
-  console.log("updating position for ", object)
   const MOTION = 10;
   if (event.keyCode === 37) {
     object.x(object.x() - MOTION);
