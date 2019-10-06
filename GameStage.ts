@@ -1,11 +1,24 @@
-import color from 'color;'
+const color = require('color');
 import Konva from 'konva';
 import Character from './Character';
 
-const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
-getRandomEasing();
+type Bounds = {
+  width: number
+  height: number
+  x: number
+  y: number
+}
 
-const oscillator = 1
+type Scene = {
+  color: string
+  level: number
+  numFoes: number
+  complete: boolean
+  startScene: Function
+  layer: Konva.Layer
+}
+
+const colors: string[] = ['880000', 'FF0000', '008800', '00FF00', '000088', '0000FF'];
 
 function createBackdrop(stage): Konva.Layer {
   const backdrop = new Konva.Layer();
@@ -21,7 +34,7 @@ function createBackdrop(stage): Konva.Layer {
 }
 
 /** Setup and display the Konva.Stage. */
-export default function GameStage(props): Konva.Stage {
+function createStage(props): Konva.Stage {
   const dimensions = {width: 600, height: 400};
   const stage = new Konva.Stage({
     ...dimensions,
@@ -30,20 +43,54 @@ export default function GameStage(props): Konva.Stage {
   });
 
   const backdrop = createBackdrop(stage);
-  const player = Player({}, stage);
   const container = stage.container();
 
-  npcs.forEach((node) => layer.add(node));
   stage.add(backdrop);
-  stage.add(layer);
   backdrop.draw();
 
-  // Craete the player shape. 
+  return stage;
+}
+
+/** Start a new instance of the game. */
+function startGame(props) {
+  const stage = createStage(props);
+  const player = Player({}, stage); 
+  // @ts-ignore
+  const Scenes = colors.reduce((scenes: Scene[], color, level) => {
+
+    const scene: Scene = {
+      color,
+      level,
+      layer: new Konva.Layer(),
+      numFoes: 0,
+      complete: false,
+      // @ts-ignore
+      startScene: function(resolve) {
+        createScene(stage, player, color, level);
+        if (Scenes[level + 1]) {
+          resolve(Scenes[level + 1].startScene());
+        }
+        else {
+          alert('You won!');
+        }
+      }
+    }
+    scenes.push(scene);
+  }, [])
+
+  new Promise((resolve, rej) => {
+    Scenes[0].startScene(resolve);
+  }).then()
+
+}
+
+/** Assign keydown listeners for movement. */
+function initLayerListeners(stage, layer, player) {
+  const container = stage.getContainer();
   container.tabIndex = 1;
   container.focus();
   container.addEventListener('keydown', function(event) {
     event.preventDefault();
-    // @ts-ignore
 
     updatePosition(event, player);
     // @ts-ignore;
@@ -62,20 +109,20 @@ export default function GameStage(props): Konva.Stage {
 
     layer.batchDraw();
   });
-
-  return stage;
 }
 
-const scene(stage, player, color, level): Konva.Layer {
+/** Creates opponents for a new scene based on color. */
+function createScene(stage, player, color, level): Konva.Layer {
   const layer = new Konva.Layer();
-  const npcs = createFoes(stage, color, level);
-  layer.add(player);
+  const npcs = createFoes(stage, player, color, level);
+  npcs.forEach((n) => layer.add(n));
   layer.draw();
+  return layer;
 }
 
-function createFoes(stage, color, level): Konva.Rect[] {
-  const numFoes = Math.pow(level, 2) + randomNumber(level, level * 2);
-  const npcs = [];
+function createFoes(stage, player, color, level): Konva.Rect[] {
+  const qty = Math.pow(level, 2) + randomNumber(level, level * 2);
+  const npcs: Konva.Rect[] = [];
   for (var id = 0; id < qty; id++) 
     npcs.push(createNPC({color, id}, stage, player));
 
@@ -136,7 +183,7 @@ function createNPC(props = {}, stage, player): Konva.Rect {
   return npc;
 }
 
-function isNearPlayer(playerBounds: Bounds, item: Bounds): boolean {
+function isNearPlayer(player, item: Bounds): boolean {
   const playerBounds = player.getClientRect();
   playerBounds.width += item.width;
   playerBounds.height += item.height;
