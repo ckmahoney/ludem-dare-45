@@ -17,7 +17,7 @@ type Scene = {
   numFoes: number
   complete: boolean
   layer: null | Konva.Layer
-  startScene: Function
+  start: Function
   onComplete?: Function
 }
 
@@ -53,12 +53,11 @@ function createStage(props): Konva.Stage {
 }
 
 /** Start a new instance of the game. */
-export default function startGame(props) {
+export default function startGame(props): Konva.Stage {
   const stage = createStage(props);
   const player = Player({}, stage); 
   // @ts-ignore
   const Scenes = colors.reduce((scenes: Scene[], color, index) => {
-    console.log("startGame().callback.scenes: " , scenes);
     const scene: Scene = {
       color,
       level: index + 1,
@@ -66,21 +65,29 @@ export default function startGame(props) {
       layer: null,
       complete: false,
       // @ts-ignore
-      startScene: function(resolve) {
+      start: function() {
         console.log("Starting scene " + this.level);
+        console.log("Player: " , player)
+        console.log("Player.rotate() " , player.rotate)
         this.layer = createScene(stage, player, color, this.level);
-        while (!this.complete)
-          return;
-
-        if (Scenes[index - 1]) 
-          Scenes[index-1].layer.destroy();
+        this.layer.add(player);
+        console.log("Player: " , player)
+        console.log("Player.rotate() " , player.rotate)
+        initLayerListeners(stage, this.layer, player)
+        this.layer.draw()
+      },
+      onComplete:  function() {
+        if (Scenes[index - 1]) {
+          // @ts-ignore object is possibly null
+          Scenes[index - 1].layer.destroy();
+        }
 
         if (Scenes[index + 1]) {
           // @ts-ignore
-          this.onComplete = Promise.resolve(Scenes[level + 1].startScene());
+          Scenes[index + 1].start()
         }
         else {
-          this.onComplete = () => alert('You won!');
+          alert('You won!');
         }
       }
     }
@@ -88,8 +95,8 @@ export default function startGame(props) {
     return scenes;
   }, []);
 
-  Scenes[0].startScene(Promise.resolve);
-
+  Scenes[0].start();
+  return stage;
 }
 
 /** Assign keydown listeners for movement. */
@@ -99,24 +106,40 @@ function initLayerListeners(stage, layer, player) {
   container.focus();
   container.addEventListener('keydown', function(event) {
     event.preventDefault();
-
     updatePosition(event, player);
-    // @ts-ignore;
+
+    if (event.keyCode == 18 || event.key == 'r') {
+      const rotation = parseInt(player.rotation()) + 2;
+      player.rotation(rotation).draw();
+    }
+
+    if (event.keyCode == 87 || event.key == 'w') { 
+      const rotation = parseInt(player.rotation()) - 2;
+      player.rotation(rotation);
+    }
+
+    const FIRE = [69, 70, 'e', 'f'];
+    if (FIRE.includes(event.keyCode) || FIRE.includes(event.key)) {
+      createProjectile(player);
+    }
 
     const bounds = player.getClientRect();
     layer.children.each(function(defender) {
-      // @ts-ignore 
       if (defender == player) // Do not collide with self.
         return;
-      // @ts-ignore
       const bounds2 = defender.getClientRect();
       if (hasIntersection(bounds, bounds2)) {
-        return handleIntersection(player, defender);
+        console.log(bounds, bounds2);
+        // return handleIntersection(player, defender);
       }
     });
 
     layer.batchDraw();
   });
+}
+
+function createProjectile(player) {
+  
 }
 
 /** Creates opponents for a new scene based on color. */
@@ -135,7 +158,6 @@ function createFoes(stage, player, color, level): Konva.Rect[] {
   for (var id = 0; id < qty; id++) 
     npcs.push(createNPC({color, id}, stage, player));
 
-  console.log("CreateFoes()", npcs);
   return npcs;
 }
 
@@ -160,7 +182,6 @@ function createNPC(props = {}, stage, player): Konva.Rect {
   if (isNearPlayer(player, rect)) // Create a safe space around the player. 
     return createNPC(props, stage, player);
  
-
   const npc = new Konva.Rect(rect);
   maintainBounds(npc, stage);
   npc.cache();
@@ -239,7 +260,9 @@ function updatePlayerColor(player): void {
 
 /** Controller for player collision. */
 function handleIntersection(attacker, defender): boolean {
+
  const approved = checkAttack(attacker, defender);
+
   if (approved) {
     destroy(defender);
     updateBackground(attacker);
@@ -329,6 +352,7 @@ function hasIntersection(rect1, rect2): boolean {
 
 /** Parse a keystroke into a player movement; update the player position. */
 function updatePosition(event, object): void {
+  console.log("updating position for ", object)
   const MOTION = 10;
   if (event.keyCode === 37) {
     object.x(object.x() - MOTION);
@@ -361,6 +385,7 @@ function Player(props = {}, stage): Konva.Star {
     stroke: '#ffffff',
     strokeWidth: 4,
     name: 'fillShape',
+    rotate: 0,
     shadowColor: '#ddd',
     shadowOffset: {x: 2, y:3},
     shadowBlur: 2
@@ -368,12 +393,12 @@ function Player(props = {}, stage): Konva.Star {
 
   const player = new Konva.Star(star); 
 
-  const anim = new Konva.Animation(function(frame) {
-    const rotation = frame.frameRate / 1000 || 0;
-    // @ts-ignore
-    player.rotate(rotation);
-    player.draw()
-  });
+  // const anim = new Konva.Animation(function(frame) {
+  //   const rotation = frame.frameRate / 1000 || 0;
+  //   // @ts-ignore
+  //   player.rotate(rotation);
+  //   player.draw()
+  // });
 
   // anim.start()
 
