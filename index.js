@@ -11,4 +11,19 @@ const initGame = {
   ]
 }
 
+function updateStyle() {
+  const style = document.createElement('style');
+  style.innerText = `
+    body {
+      background: black;
+    }
+    .konvajs-content {
+      margin: 0 auto;
+    }
+  `
+
+  document.body.appendChild(style)
+}
+
+updateStyle();
 GameStage(initGame);
