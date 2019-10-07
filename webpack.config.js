@@ -7,7 +7,7 @@ module.exports = {
     port: 9000
   },
   devtool: 'inline-source-map',
-  entry: './src/index.js',
+  entry: './index.js',
   module: {
     rules: [
       {

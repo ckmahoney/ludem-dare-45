@@ -21,9 +21,9 @@
     "typeRoots" : ["./node_modules/@types", "src"],
     "noUnusedLocals": false
   },
-  "include": [
-    "src"
-  ], 
+  // "include": [
+  //   "src"
+  // ], 
   "rules" : {
     "no-unused-vars":"off",
     "@typescript-eslint/no-unused-vars": "off",
