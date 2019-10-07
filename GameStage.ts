@@ -1,6 +1,5 @@
 const color = require('color');
 import Konva from 'konva';
-import Character from './Character';
 
 type Bounds = {
   width: number
