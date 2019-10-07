@@ -48,7 +48,6 @@ function resetPlayer(): Player {
     level: 0, 
     scene: null
   };
- 
 
   // @ts-ignore
   return _player;
@@ -69,16 +68,26 @@ function createBackdrop(stage): Konva.Layer {
 
 /** Setup and display the Konva.Stage. */
 function createStage(): Konva.Stage {
-  const dimensions = {width: 600, height: 400};
+  const container = <HTMLDivElement>document.querySelector("#game");
+  const bounds = container.getBoundingClientRect();
+  const dimensions = {width: 0, height: 0};
+
+  if (bounds.width < 900) {
+    dimensions.width = 600;
+    dimensions.height = 400;
+  }
+  else {
+    dimensions.width = 900
+    dimensions.height = 600;
+  }
+
   const stage = new Konva.Stage({
     ...dimensions,
-    container: 'game',
+    container,
     key: 'GameStage'
   });
 
   const backdrop = createBackdrop(stage);
-  const container = stage.container();
-
   stage.add(backdrop);
   backdrop.draw();
 
@@ -97,6 +106,8 @@ function initializeGame(stage): Konva.Stage {
       layer: null,
       // @ts-ignore
       start: function() {
+        // @ts-ignore
+        _player.level = index;
         this.layer = createScene(stage, player, color, this.level);
         this.layer.add(player);
         // debugger;
@@ -143,16 +154,16 @@ function showVictory(stage) {
   const text = new Konva.Text({
     text: 'The universe is safe now\n thanks to you',
     fill: 'white',
-    x: 30, 
-    y: 130,
+    width: stage.width(),
+    align: 'center',
     fontSize: 40
   });
 
   const win = new Konva.Text({
     text: 'YOU WIN',
     fill: 'cyan',
-    x: 30,
-    y: 220,
+    width: stage.width(),
+    align: 'center',
     fontSize: 75
   });
 
@@ -166,28 +177,31 @@ function showVictory(stage) {
 
 /** Show a title card, then the first scene. */
 export default function startGame(audio): void {
-  if (audio)
-    // @ts-ignore;
-    window.audio = audio
   const stage = createStage();
   const layer = new Konva.Layer();
   const titlecard = new Konva.Text({
     text: 'Starlight',
-    x: 130,
-    y: 130,
+    width: stage.width(),
+    y: 30,
+    align: 'center',
     fill: 'white',
     sroke: 'cyan', 
-    fontSize: 60,
+    fontFamily: 'Impact',
+    letterSpacing: 15,
+    fontSize: 90,
     shadowColor: '#aaa',
     shadowOffset: {x: 3, y: 5}
   });
 
   const instructions = new Konva.Text({
     text: getInstructionText(),
-    x: 30,
-    y: 200,
+    width: stage.width(),
+    fontFamily: 'Tahoma',
+    letterSpacing: 3,
+    align: 'center',
     fill: 'white',
-    fontSize: 14  
+    y: 60 + titlecard.height(),
+    fontSize: 22
   });
 
   layer.add(titlecard);
@@ -199,8 +213,8 @@ export default function startGame(audio): void {
     // @ts-ignore
     if (started)
       return;
-    if (!audio.playing)
-      audio.play();
+
+    initializeAudio(audio);
 
     // @ts-ignore
     started = true;
@@ -211,15 +225,24 @@ export default function startGame(audio): void {
   });
 }
 
+/** Start the music for the game if compatible with Browser. */
+function initializeAudio(audio) {
+  if (audio)
+    // @ts-ignore;
+    window.audio = audio
+
+  if (!audio.playing && typeof audio.play == 'function')
+    audio.play();
+}
+
 /** Display the text on titlecard for how to play. */
 function getInstructionText(): string {
   return `
     You are a galactic empire condensed into a single star.\n
     The arch nemesis, COLOR, has split itself into thousands of pieces.\n
     It is your noble duty to DESTROY ALL COLOR\n
-    use the arrow keys to move your starship\n
-    press 'e' or 'f' to fire your lazzer\n
-    spin your starship using 'w' or 'r'\n
+    use the Arrow keys to move your starship\n
+    press Spacebar to fire your lazer\n
     CLICK TO START
   `;
 }
@@ -233,25 +256,13 @@ function initLayerListeners(stage: Konva.Stage, layer: Konva.Layer, player: Play
   container.addEventListener('keydown', function(event) {
     event.preventDefault();
     // debugger;
-    updatePosition(event, player);
 
-    if (event.keyCode == 18 || event.key == 'r') {
-      // @ts-ignore
-      const rotation = parseInt(player.rotation()) + 2;
-      player.rotation(rotation).draw();
-    }
-
-    if (event.keyCode == 87 || event.key == 'w') { 
-      // @ts-ignore
-      const rotation = parseInt(player.rotation()) - 2;
-      player.rotation(rotation);
-    }
-
-    const FIRE = [69, 70, 'e', 'f'];
-    if (FIRE.includes(event.keyCode) || FIRE.includes(event.key)) {
+    const ARROWS = [37, 38, 39, 40];
+    if (ARROWS.includes(event.keyCode))
+      updatePosition(event, player);
+    else if (event.keyCode == 32) // spacebar
       createLazzer(player, layer);
-    }
-
+    
     // @ts-ignore
     const bounds = player.getClientRect();
     layer.children.each(function(child) {
@@ -269,6 +280,8 @@ function initLayerListeners(stage: Konva.Stage, layer: Konva.Layer, player: Play
 function createLazzer(player: Player, layer: Konva.Layer): Konva.Circle {
     // @ts-ignore
   const theta = player.rotation();
+  // @ts-ignore
+  const fill = _player.level > 0 ? '#' + colors[_player.level - 1] : '#ffffff;'
   const circle = {
     radius: 1,
     x: player.x(),
@@ -276,7 +289,7 @@ function createLazzer(player: Player, layer: Konva.Layer): Konva.Circle {
     name: 'lazzer',
     width: 2,
     height: 10,
-    fill: 'white',
+    fill: fill,
     stroke: 'white'
   }
 
@@ -370,9 +383,45 @@ function createNPC(props = {}, stage, player): Konva.Rect {
   maintainBounds(npc, stage);
   npc.cache();
 
+  // setTimeout(() => teleport(npc, player), randomNumber(3000,6000));
+  setTimeout(() => maybeTeleport(npc, player), randomNumber(1000,4000))
+
   return npc;
 }
 
+/** Change the location of the node. */
+function teleport(node, player, x, y, layer, stage) {
+  const duration = 0.5
+  const move = new Konva.Tween({
+    node, 
+    x,
+    y,
+    duration
+  });
+
+  move.play();
+  setTimeout(() => maybeTeleport(node, player), duration + randomNumber(3000,6000));
+}
+
+function maybeTeleport(node, player) {
+  const layer =node.getLayer()
+  const stage = layer.getStage();
+  const x = randomNumber(0, stage.width());
+  const y = randomNumber(0, stage.height());
+  const bounds = {
+    x,
+    y,
+    width: node.width(),
+    height: node.height()
+  }
+
+  if (isNearPlayer(player, bounds))
+    return maybeTeleport(node, player);
+  else 
+    return teleport(node, player, x, y, layer, stage)
+}
+
+/** Determines if the target node is off the visible portion of stage */
 function isOutOfBounds(node, stage): boolean {
   if (!node || !stage)
     return true;
@@ -551,7 +600,6 @@ function hasIntersection(rect1, rect2): boolean {
     rect2.y + rect2.height < rect1.y
   );
 }
-
 /** Parse a keystroke into a player movement; update the player position. */
 function updatePosition(event, object): void {
   const MOTION = 10;
